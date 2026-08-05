@@ -168,6 +168,10 @@ export default function AnnouncementsPage() {
     }
   }
 
+  const segmented = (active: boolean) =>
+    'rounded-md px-3 py-1.5 text-sm font-medium transition ' +
+    (active ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-white');
+
   return (
     <>
       <Topbar
@@ -176,115 +180,106 @@ export default function AnnouncementsPage() {
       />
 
       <div className="flex-1 overflow-y-auto bg-slate-50 p-6">
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[340px_1fr]">
-          {/* ---------------- Filters ---------------- */}
-          <div className="card h-fit p-5">
-            <h2 className="mb-4 text-sm font-semibold text-slate-900">Filters</h2>
-
-            {/* Source */}
-            <div className="mb-4">
-              <label className="label">Companies from</label>
-              <div className="grid grid-cols-2 gap-2">
-                {(['index', 'custom'] as Source[]).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setSource(s)}
-                    className={
-                      'rounded-lg border px-3 py-2 text-sm font-medium capitalize transition ' +
-                      (source === s
-                        ? 'border-brand-500 bg-brand-50 text-brand-700'
-                        : 'border-slate-200 text-slate-600 hover:bg-slate-50')
-                    }
-                  >
-                    {s === 'index' ? 'Index list' : 'Custom codes'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {source === 'index' ? (
-              <>
-                <div className="mb-4">
-                  <label className="label">Index</label>
-                  <select
-                    className="input"
-                    value={index}
-                    onChange={(e) => setIndex(e.target.value)}
-                  >
-                    {indices.map((i) => (
-                      <option key={i} value={i}>
-                        {i}
-                      </option>
-                    ))}
-                  </select>
+        <div className="space-y-6">
+          {/* ---------------- Filters (top bar) ---------------- */}
+          <div className="card p-4">
+            <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
+              {/* Source */}
+              <div>
+                <label className="label">Companies from</label>
+                <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
+                  {(['index', 'custom'] as Source[]).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setSource(s)}
+                      className={segmented(source === s)}
+                    >
+                      {s === 'index' ? 'Index list' : 'Custom codes'}
+                    </button>
+                  ))}
                 </div>
-                <div className="mb-4">
-                  <label className="label">Companies</label>
-                  <MultiSelect
-                    options={companyOptions}
-                    selected={selectedScrips}
-                    onChange={setSelectedScrips}
-                    emptyLabel={`All ${companies.length} in index`}
+              </div>
+
+              {/* Companies selection */}
+              {source === 'index' ? (
+                <>
+                  <div className="w-40">
+                    <label className="label">Index</label>
+                    <select
+                      className="input"
+                      value={index}
+                      onChange={(e) => setIndex(e.target.value)}
+                    >
+                      {indices.map((i) => (
+                        <option key={i} value={i}>
+                          {i}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="min-w-[220px] flex-1">
+                    <label className="label">Companies</label>
+                    <MultiSelect
+                      options={companyOptions}
+                      selected={selectedScrips}
+                      onChange={setSelectedScrips}
+                      emptyLabel={`All ${companies.length} in index`}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="min-w-[240px] flex-1">
+                  <label className="label">BSE scrip codes</label>
+                  <input
+                    className="input font-mono text-xs"
+                    value={customCodes}
+                    onChange={(e) => setCustomCodes(e.target.value)}
+                    placeholder="500325, 532540"
                   />
                 </div>
-              </>
-            ) : (
-              <div className="mb-4">
-                <label className="label">BSE scrip codes</label>
-                <textarea
-                  className="input min-h-[80px] font-mono text-xs"
-                  value={customCodes}
-                  onChange={(e) => setCustomCodes(e.target.value)}
-                  placeholder="500325, 532540"
-                />
-                <p className="mt-1 text-xs text-slate-400">Comma or space separated.</p>
+              )}
+
+              {/* Category */}
+              <div className="w-44">
+                <label className="label">Category</label>
+                <select
+                  className="input"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                >
+                  {categories.map((c) => (
+                    <option key={c} value={c}>
+                      {c === '-1' ? 'All categories' : c}
+                    </option>
+                  ))}
+                </select>
               </div>
-            )}
 
-            <div className="my-4 border-t border-slate-100" />
+              {/* Keyword preset */}
+              <div className="w-48">
+                <label className="label">Keyword preset</label>
+                <select className="input" value={preset} onChange={(e) => onPreset(e.target.value)}>
+                  {Object.keys(KEYWORD_PRESETS).map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            {/* Category */}
-            <div className="mb-4">
-              <label className="label">BSE category</label>
-              <select
-                className="input"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-              >
-                {categories.map((c) => (
-                  <option key={c} value={c}>
-                    {c === '-1' ? 'All categories' : c}
-                  </option>
-                ))}
-              </select>
-            </div>
+              {/* Keyword filter */}
+              <div className="w-44">
+                <label className="label">Keyword</label>
+                <input
+                  className="input"
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  placeholder="e.g. trading window"
+                />
+              </div>
 
-            {/* Keyword */}
-            <div className="mb-4">
-              <label className="label">Keyword preset</label>
-              <select className="input" value={preset} onChange={(e) => onPreset(e.target.value)}>
-                {Object.keys(KEYWORD_PRESETS).map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="mb-4">
-              <label className="label">Keyword filter</label>
-              <input
-                className="input"
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                placeholder="e.g. trading window"
-              />
-            </div>
-
-            <div className="my-4 border-t border-slate-100" />
-
-            {/* Dates */}
-            <div className="mb-4 grid grid-cols-2 gap-3">
-              <div>
+              {/* From */}
+              <div className="w-36">
                 <label className="label">From</label>
                 <input
                   type="date"
@@ -294,7 +289,9 @@ export default function AnnouncementsPage() {
                   onChange={(e) => setFrom(e.target.value)}
                 />
               </div>
-              <div>
+
+              {/* To */}
+              <div className="w-36">
                 <label className="label">To</label>
                 <input
                   type="date"
@@ -304,52 +301,46 @@ export default function AnnouncementsPage() {
                   onChange={(e) => setTo(e.target.value)}
                 />
               </div>
-            </div>
 
-            {/* View mode */}
-            <div className="mb-5">
-              <label className="label">Result view</label>
-              <div className="grid grid-cols-1 gap-2">
-                {[
-                  { v: 'latest', t: 'Latest per company', d: 'One row per company' },
-                  { v: 'all', t: 'All announcements', d: 'Every matching filing' },
-                ].map((o) => (
-                  <button
-                    key={o.v}
-                    onClick={() => setMode(o.v as 'latest' | 'all')}
-                    className={
-                      'flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition ' +
-                      (mode === o.v
-                        ? 'border-brand-500 bg-brand-50'
-                        : 'border-slate-200 hover:bg-slate-50')
-                    }
-                  >
-                    <span
-                      className={mode === o.v ? 'font-medium text-brand-700' : 'text-slate-700'}
+              {/* View mode */}
+              <div>
+                <label className="label">Result view</label>
+                <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
+                  {[
+                    { v: 'latest', t: 'Latest / company' },
+                    { v: 'all', t: 'All filings' },
+                  ].map((o) => (
+                    <button
+                      key={o.v}
+                      onClick={() => setMode(o.v as 'latest' | 'all')}
+                      className={segmented(mode === o.v)}
                     >
                       {o.t}
-                    </span>
-                    <span className="text-xs text-slate-400">{o.d}</span>
-                  </button>
-                ))}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Fetch */}
+              <div className="ml-auto">
+                <label className="label select-none opacity-0">Go</label>
+                <button onClick={runFetch} className="btn-primary" disabled={loading}>
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="h-4 w-4" />
+                  )}
+                  Fetch announcements
+                </button>
               </div>
             </div>
-
-            <button onClick={runFetch} className="btn-primary w-full" disabled={loading}>
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Search className="h-4 w-4" />
-              )}
-              Fetch announcements
-            </button>
-            <p className="mt-2 text-center text-xs text-slate-400">
+            <p className="mt-3 text-xs text-slate-400">
               {roster.length} companies · {from} → {to}
             </p>
           </div>
 
-          {/* ---------------- Results ---------------- */}
-          <div className="min-w-0 space-y-4">
+          {/* ---------------- Results (full width) ---------------- */}
+          <div className="space-y-4">
             {error && (
               <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
                 <AlertCircle className="h-4 w-4" /> {error}
@@ -370,27 +361,26 @@ export default function AnnouncementsPage() {
               <>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-col gap-1 text-sm text-slate-600">
-                   <div className="flex items-center gap-2">
-                    <Info className="h-4 w-4 text-brand-500" />
-                    {meta.mode === 'latest' ? (
-                      <span>
-                        <b>{rows.length}</b> companies ·{' '}
-                        <b>{meta.withMatch}</b> with a matching filing in range
-                      </span>
-                    ) : (
-                      <span>
-                        <b>{rows.length}</b> announcements ·{' '}
-                        {meta.totalFetched} scanned
-                      </span>
+                    <div className="flex items-center gap-2">
+                      <Info className="h-4 w-4 text-brand-500" />
+                      {meta.mode === 'latest' ? (
+                        <span>
+                          <b>{rows.length}</b> companies ·{' '}
+                          <b>{meta.withMatch}</b> with a matching filing in range
+                        </span>
+                      ) : (
+                        <span>
+                          <b>{rows.length}</b> announcements · {meta.totalFetched} scanned
+                        </span>
+                      )}
+                    </div>
+                    {!!meta.failed && meta.failed > 0 && (
+                      <div className="flex items-center gap-1.5 text-xs text-amber-600">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        {meta.failed} compan{meta.failed === 1 ? 'y' : 'ies'} couldn&apos;t be
+                        fetched (BSE throttling) — re-run to retry.
+                      </div>
                     )}
-                   </div>
-                   {!!meta.failed && meta.failed > 0 && (
-                     <div className="flex items-center gap-1.5 text-xs text-amber-600">
-                       <AlertCircle className="h-3.5 w-3.5" />
-                       {meta.failed} compan{meta.failed === 1 ? 'y' : 'ies'} couldn&apos;t be
-                       fetched (BSE throttling) — re-run to retry.
-                     </div>
-                   )}
                   </div>
                   <div className="flex gap-2">
                     <button
