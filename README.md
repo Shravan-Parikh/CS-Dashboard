@@ -1,73 +1,81 @@
-# BSE Corporate Announcements — MVP
+# CS Dashboard
 
-Pull corporate filings (Trading Window Closure, Board Meetings, Results,
-Dividends, etc.) straight from **BSE India** for the companies in an index,
-filter by category / keyword / date, and export to **Excel / CSV / a ZIP of
-PDFs**.
+One workspace for **Company Secretaries in India** — corporate filings,
+research and compliance in a single tool. This repo is the POC: a web app whose
+first fully-working module is **live BSE corporate announcements**.
 
-Frontend **and** backend are Streamlit for this MVP (no separate API server
-yet — that's the next step).
-
-## Data source
-
-This uses BSE's own public announcement JSON endpoint
-(`api.bseindia.com/BseIndiaAPI/api/AnnGetData/w`) — the same one that powers
-the Corporate Announcements page on bseindia.com. **No API key required.** It
-is undocumented, so if BSE changes it, the fix lives in one file:
-[`bse_client.py`](bse_client.py).
-
-## Setup
-
-The virtual environment already exists (`venv/`). Activate it and install deps:
-
-```bash
-source venv/bin/activate
-pip install -r requirements.txt
+```
+CS-Dashboard/
+├── backend/          Node + Express API (BSE client, JWT auth, exports)
+├── frontend/         Next.js + Tailwind app (login + dashboard)
+└── streamlit-poc/    Original Streamlit proof-of-concept (reference)
+    (app.py, bse_client.py, data/, requirements.txt at repo root for now)
 ```
 
-## Run
+> The Streamlit files (`app.py`, `bse_client.py`, `data/companies.csv`) remain
+> at the repo root as the original POC. The **web app** (backend + frontend) is
+> the product going forward.
+
+## Architecture
+
+- **backend/** — Express API. Ports the BSE announcement client to Node, adds
+  email/password auth (JWT, file-backed user store — no native deps), and
+  endpoints for announcements, companies, a PDF proxy, and ZIP export.
+- **frontend/** — Next.js (App Router) + TypeScript + Tailwind. Login/register,
+  a branded dashboard shell, and the BSE Announcements tab with all the POC
+  features (index/custom company selection, category + keyword filters, date
+  range, latest-per-company vs all views, Excel/CSV/ZIP export).
+
+## Run it locally
+
+You need **two terminals**.
+
+### 1. Backend (port 4000)
 
 ```bash
-streamlit run app.py
+cd backend
+cp .env.example .env        # first time only
+npm install                 # first time only
+npm run dev
 ```
 
-It opens at http://localhost:8501.
+### 2. Frontend (port 3000)
 
-## How to use
+```bash
+cd frontend
+cp .env.local.example .env.local   # first time only
+npm install                        # first time only
+npm run dev
+```
 
-1. **Companies from** — pick an *Index list* (Nifty50 / Sensex seeded in
-   `data/companies.csv`), *Upload CSV* (needs a `scrip_code` column), or paste
-   *Custom scrip codes*.
-2. **Category / keyword** — e.g. keyword preset **Trading Window Closure**.
-3. **Date range** — defaults to the last 14 days.
-4. **Fetch announcements** → results table with clickable PDF links.
-5. Export to **Excel / CSV**, or **Build ZIP of PDFs**.
+Open **http://localhost:3000**, create an account, and you're in.
 
-## Files
+## How the BSE feature works
 
-| File | Purpose |
-|------|---------|
-| `app.py` | Streamlit UI (front + back) |
-| `bse_client.py` | BSE endpoint wrapper — patch here if BSE changes |
-| `data/companies.csv` | Seed index constituents + BSE scrip codes |
-| `requirements.txt` | Dependencies |
+Same engine as the POC, now server-side:
 
-## Notes & caveats
+1. Pick companies (an index like Nifty50, or paste custom BSE scrip codes).
+2. Choose a category and/or keyword (e.g. **Trading Window Closure**) and a
+   date range (defaults to the last 90 days so quarterly filings are covered).
+3. **Latest per company** shows one row per company with its most recent
+   matching filing (companies with none are shown greyed; companies that
+   couldn't be fetched are flagged amber — not silently blank).
+4. Export to Excel / CSV, or download a ZIP of the PDFs.
 
-- **`data/companies.csv` is a static seed list** (Nifty 50 / Sensex union).
-  Scrip codes were entered by hand — verify before relying on them, and update
-  the file as index membership changes. Later this should be auto-synced.
-- BSE occasionally throttles rapid requests. Results are cached for 30 min
-  (per identical search) to be polite.
-- "Trading Window" filings are matched by **keyword** because BSE files them
-  under the broad *Company Update* category, not a dedicated one.
-- Older PDFs may 404 on the `AttachLive` path (they move to `AttachHis`).
-  `bse_client.build_pdf_url(..., historical=True)` builds the alternate URL.
+The backend fetches from BSE's public announcement endpoint, resolves each PDF
+to a working URL (`AttachLive` vs `AttachHis`), and proxies PDF views/downloads
+(BSE blocks refererless browser clicks).
 
-## Next steps (from the plan)
+## Notes
 
-- SQLite cache + daily sync job (APScheduler / cron) so the UI reads a local
-  DB instead of hitting BSE each time.
-- Auto-sync index constituents.
-- Expose a FastAPI `GET /announcements` for other tools to consume.
-- Optional PDF OCR + semantic search.
+- `backend/src/data/companies.csv` is a hand-entered Nifty50/Sensex seed list —
+  verify scrip codes before relying on them; auto-sync is a future step.
+- Auth is intentionally simple for the POC (JWT + a JSON user file). Swap for a
+  real database before production.
+- A full-index (50 company) fetch makes ~50 sequential BSE calls plus link
+  verification — expect up to a minute the first time.
+
+## Roadmap (next modules)
+
+Compliance Calendar · Laws & Circulars · Resolutions & Templates · Board &
+Committees · Clients — sketched in the sidebar, to be built after the POC.
