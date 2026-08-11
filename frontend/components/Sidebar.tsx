@@ -13,6 +13,7 @@ import {
   Users,
   Settings,
   Lock,
+  Radio,
 } from 'lucide-react';
 
 interface NavItem {
@@ -23,8 +24,9 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
+  { label: 'Latest Filings', href: '/announcements/latest', icon: Radio },
   { label: 'Announcements', href: '/announcements', icon: Megaphone },
-  { label: 'Compliance Calendar', href: '#', icon: CalendarClock, soon: true },
+  { label: 'Compliance Calendar', href: '/compliance', icon: CalendarClock },
   { label: 'Laws & Circulars', href: '#', icon: Scale, soon: true },
   { label: 'Resolutions & Templates', href: '#', icon: FileText, soon: true },
   { label: 'Board & Committees', href: '#', icon: Landmark, soon: true },

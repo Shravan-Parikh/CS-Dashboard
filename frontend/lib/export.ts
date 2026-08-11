@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { AnnouncementRow } from './types';
+import type { AnnouncementRow, ComplianceOccurrence, LatestRow } from './types';
 
 const COLUMNS: { key: keyof AnnouncementRow; label: string }[] = [
   { key: 'company', label: 'Company' },
@@ -62,6 +62,106 @@ export function exportXlsx(rows: AnnouncementRow[], filename: string) {
     new Blob([out], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     }),
+    filename,
+  );
+}
+
+// --- Generic writers, so each new row shape needs only a column map ---
+
+interface Column<T> {
+  label: string;
+  get: (row: T) => string;
+}
+
+function records<T>(rows: T[], cols: Column<T>[]) {
+  return rows.map((r) => {
+    const rec: Record<string, string> = {};
+    cols.forEach((c) => (rec[c.label] = c.get(r) ?? ''));
+    return rec;
+  });
+}
+
+function writeCsv<T>(rows: T[], cols: Column<T>[], filename: string) {
+  const escape = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  const lines = [
+    cols.map((c) => c.label).join(','),
+    ...rows.map((r) => cols.map((c) => escape(c.get(r) ?? '')).join(',')),
+  ];
+  triggerDownload(new Blob([lines.join('\n')], { type: 'text/csv' }), filename);
+}
+
+function writeXlsx<T>(
+  rows: T[],
+  cols: Column<T>[],
+  widths: number[],
+  sheet: string,
+  filename: string,
+) {
+  const ws = XLSX.utils.json_to_sheet(records(rows, cols));
+  ws['!cols'] = widths.map((wch) => ({ wch }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheet);
+  const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  triggerDownload(
+    new Blob([out], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }),
+    filename,
+  );
+}
+
+// --- CS-relevant latest feed ---
+
+const LATEST_COLS: Column<LatestRow>[] = [
+  { label: 'Date/Time', get: (r) => r.news_dt },
+  { label: 'Company', get: (r) => r.company },
+  { label: 'Symbol', get: (r) => r.symbol },
+  { label: 'Scrip Code', get: (r) => r.scrip_code },
+  { label: 'CS Bucket', get: (r) => r.bucketLabel },
+  { label: 'Regulation', get: (r) => r.reference },
+  { label: 'Category', get: (r) => r.category },
+  { label: 'Sub-category', get: (r) => r.subcategory },
+  { label: 'Headline', get: (r) => r.headline },
+  { label: 'PDF', get: (r) => r.pdf_url },
+];
+
+export function exportLatestCsv(rows: LatestRow[], filename: string) {
+  writeCsv(rows, LATEST_COLS, filename);
+}
+
+export function exportLatestXlsx(rows: LatestRow[], filename: string) {
+  writeXlsx(
+    rows,
+    LATEST_COLS,
+    [20, 30, 12, 10, 22, 24, 20, 30, 65, 70],
+    'CS Feed',
+    filename,
+  );
+}
+
+// --- Compliance calendar ---
+
+const COMPLIANCE_COLS: Column<ComplianceOccurrence>[] = [
+  { label: 'Due Date', get: (o) => o.due },
+  { label: 'Obligation', get: (o) => o.title },
+  { label: 'Authority', get: (o) => o.authority },
+  { label: 'Provision', get: (o) => o.reference },
+  { label: 'Type', get: (o) => o.kind },
+  { label: 'Period', get: (o) => o.period },
+  { label: 'Financial Year', get: (o) => o.fy },
+  { label: 'Notes', get: (o) => o.note },
+];
+
+export function exportComplianceCsv(rows: ComplianceOccurrence[], filename: string) {
+  writeCsv(rows, COMPLIANCE_COLS, filename);
+}
+
+export function exportComplianceXlsx(rows: ComplianceOccurrence[], filename: string) {
+  writeXlsx(
+    rows,
+    COMPLIANCE_COLS,
+    [12, 48, 18, 32, 12, 16, 14, 70],
+    'Compliance Calendar',
     filename,
   );
 }

@@ -9,10 +9,13 @@ import {
   Package,
   Info,
   AlertCircle,
+  Radio,
 } from 'lucide-react';
 import Topbar from '@/components/Topbar';
+import ModuleTabs from '@/components/ModuleTabs';
 import MultiSelect from '@/components/MultiSelect';
 import ResultsTable from '@/components/ResultsTable';
+import CompanyPanel from '@/components/CompanyPanel';
 import * as api from '@/lib/api';
 import { exportCsv, exportXlsx } from '@/lib/export';
 import type { AnnouncementMeta, AnnouncementRow, Company } from '@/lib/types';
@@ -29,6 +32,11 @@ const KEYWORD_PRESETS: Record<string, string> = {
   Acquisition: 'acquisition',
   '(No keyword — category only)': '',
 };
+
+const TABS = [
+  { label: 'Latest feed', href: '/announcements/latest', icon: Radio },
+  { label: 'Company search', href: '/announcements', icon: Search },
+];
 
 function isoDaysAgo(days: number) {
   const d = new Date();
@@ -63,6 +71,8 @@ export default function AnnouncementsPage() {
   const [rows, setRows] = useState<AnnouncementRow[] | null>(null);
   const [meta, setMeta] = useState<AnnouncementMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [panelScrip, setPanelScrip] = useState<string | null>(null);
+  const [panelName, setPanelName] = useState<string | undefined>();
 
   // load indices + categories once
   useEffect(() => {
@@ -178,6 +188,7 @@ export default function AnnouncementsPage() {
         title="BSE Corporate Announcements"
         subtitle="Live corporate filings from BSE India"
       />
+      <ModuleTabs tabs={TABS} />
 
       <div className="flex-1 overflow-y-auto bg-slate-50 p-6">
         <div className="space-y-6">
@@ -419,7 +430,13 @@ export default function AnnouncementsPage() {
                       the keyword.
                     </div>
                   ) : (
-                    <ResultsTable rows={rows} />
+                    <ResultsTable
+                      rows={rows}
+                      onCompanyClick={(scrip, name) => {
+                        setPanelScrip(scrip);
+                        setPanelName(name);
+                      }}
+                    />
                   )}
                 </div>
               </>
@@ -436,6 +453,12 @@ export default function AnnouncementsPage() {
           </div>
         </div>
       </div>
+
+      <CompanyPanel
+        scrip={panelScrip}
+        fallbackName={panelName}
+        onClose={() => setPanelScrip(null)}
+      />
     </>
   );
 }

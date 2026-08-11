@@ -17,7 +17,13 @@ function fmtDate(iso: string) {
   });
 }
 
-export default function ResultsTable({ rows }: { rows: AnnouncementRow[] }) {
+export default function ResultsTable({
+  rows,
+  onCompanyClick,
+}: {
+  rows: AnnouncementRow[];
+  onCompanyClick?: (scrip: string, name: string) => void;
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[900px] text-sm">
@@ -56,7 +62,17 @@ export default function ResultsTable({ rows }: { rows: AnnouncementRow[] }) {
                 )}
               </td>
               <td className="px-3 py-3">
-                <div className="font-medium text-slate-800">{r.company}</div>
+                {onCompanyClick ? (
+                  <button
+                    onClick={() => onCompanyClick(r.scrip_code, r.company)}
+                    className="text-left font-medium text-slate-800 hover:text-brand-600 hover:underline"
+                    title="View this company's full filing timeline"
+                  >
+                    {r.company}
+                  </button>
+                ) : (
+                  <div className="font-medium text-slate-800">{r.company}</div>
+                )}
                 <div className="text-xs text-slate-400">
                   {r.symbol ? `${r.symbol} · ` : ''}
                   {r.scrip_code}
