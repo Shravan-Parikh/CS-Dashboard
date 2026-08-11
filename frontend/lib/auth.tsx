@@ -36,27 +36,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api
       .me()
       .then((res) => setUser(res.user))
-      .catch(() => api.setToken(null))
+      .catch(() => api.clearSession())
       .finally(() => setLoading(false));
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await api.login(email, password);
-    api.setToken(res.token);
+    api.setSession(res);
     setUser(res.user);
   }, []);
 
   const register = useCallback(
     async (name: string, email: string, password: string) => {
       const res = await api.register(name, email, password);
-      api.setToken(res.token);
+      api.setSession(res);
       setUser(res.user);
     },
     [],
   );
 
   const logout = useCallback(() => {
-    api.setToken(null);
+    api.clearSession();
     setUser(null);
     router.push('/login');
   }, [router]);

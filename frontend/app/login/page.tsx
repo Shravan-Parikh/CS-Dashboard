@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { ShieldCheck, Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 
+// Sign-ups are closed during the pilot; accounts come from an admin.
+const SIGNUP_OPEN = process.env.NEXT_PUBLIC_ALLOW_SIGNUP === 'true';
+
 export default function LoginPage() {
   const { user, loading, login, register } = useAuth();
   const router = useRouter();
@@ -127,18 +130,24 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-slate-500">
-            {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-            <button
-              className="font-semibold text-brand-600 hover:text-brand-700"
-              onClick={() => {
-                setMode(mode === 'login' ? 'register' : 'login');
-                setError(null);
-              }}
-            >
-              {mode === 'login' ? 'Sign up' : 'Sign in'}
-            </button>
-          </p>
+          {SIGNUP_OPEN ? (
+            <p className="mt-6 text-center text-sm text-slate-500">
+              {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+              <button
+                className="font-semibold text-brand-600 hover:text-brand-700"
+                onClick={() => {
+                  setMode(mode === 'login' ? 'register' : 'login');
+                  setError(null);
+                }}
+              >
+                {mode === 'login' ? 'Sign up' : 'Sign in'}
+              </button>
+            </p>
+          ) : (
+            <p className="mt-6 text-center text-xs text-slate-400">
+              Accounts are provisioned by your administrator during the pilot.
+            </p>
+          )}
         </div>
       </div>
     </div>
