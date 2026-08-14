@@ -9,8 +9,11 @@ import {
   ExternalLink,
   Building2,
   ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 import * as api from '@/lib/api';
+import WatchlistStar from '@/components/WatchlistStar';
+import AiSummaryModal, { type SummaryTarget } from '@/components/AiSummaryModal';
 import type { CompanyTimelineResponse } from '@/lib/types';
 
 const MONTH_OPTIONS = [3, 6, 12, 24];
@@ -47,6 +50,7 @@ export default function CompanyPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [onlyCs, setOnlyCs] = useState(false);
+  const [summaryTarget, setSummaryTarget] = useState<SummaryTarget | null>(null);
 
   // Close on Escape — a slide-over that traps you is worse than no slide-over.
   useEffect(() => {
@@ -115,9 +119,19 @@ export default function CompanyPanel({
               <Building2 className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="truncate text-base font-semibold text-slate-900">
-                {data?.company.company || fallbackName || scrip}
-              </h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="truncate text-base font-semibold text-slate-900">
+                  {data?.company.company || fallbackName || scrip}
+                </h2>
+                <WatchlistStar
+                  size="md"
+                  company={{
+                    scrip_code: scrip,
+                    company: data?.company.company || fallbackName || scrip,
+                    symbol: data?.company.symbol || '',
+                  }}
+                />
+              </div>
               <p className="text-xs text-slate-400">
                 {data?.company.symbol ? `${data.company.symbol} · ` : ''}
                 BSE {scrip}
@@ -246,15 +260,30 @@ export default function CompanyPanel({
                             </p>
                           </div>
                           {r.pdf_url && (
-                            <a
-                              href={api.pdfProxyUrl(r.pdf_url)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="mt-0.5 inline-flex h-7 shrink-0 items-center gap-1 self-start rounded-md border border-slate-200 px-2 text-[11px] font-medium text-brand-600 hover:bg-brand-50"
-                            >
-                              <FileText className="h-3 w-3" /> PDF
-                              <ExternalLink className="h-2.5 w-2.5" />
-                            </a>
+                            <div className="mt-0.5 flex shrink-0 items-center gap-1 self-start">
+                              <button
+                                onClick={() =>
+                                  setSummaryTarget({
+                                    ...r,
+                                    company: data?.company.company || r.company,
+                                    symbol: data?.company.symbol || '',
+                                  })
+                                }
+                                title="Get a ready-made prompt to summarise this with Claude or ChatGPT"
+                                className="inline-flex h-7 items-center rounded-md border border-slate-200 px-1.5 text-violet-600 hover:bg-violet-50"
+                              >
+                                <Sparkles className="h-3 w-3" />
+                              </button>
+                              <a
+                                href={api.pdfProxyUrl(r.pdf_url)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 px-2 text-[11px] font-medium text-brand-600 hover:bg-brand-50"
+                              >
+                                <FileText className="h-3 w-3" /> PDF
+                                <ExternalLink className="h-2.5 w-2.5" />
+                              </a>
+                            </div>
                           )}
                         </li>
                       ))}
@@ -266,6 +295,8 @@ export default function CompanyPanel({
           )}
         </div>
       </aside>
+
+      <AiSummaryModal target={summaryTarget} onClose={() => setSummaryTarget(null)} />
     </div>
   );
 }

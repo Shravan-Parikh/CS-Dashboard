@@ -16,6 +16,7 @@ import ModuleTabs from '@/components/ModuleTabs';
 import MultiSelect from '@/components/MultiSelect';
 import ResultsTable from '@/components/ResultsTable';
 import CompanyPanel from '@/components/CompanyPanel';
+import SavedViews from '@/components/SavedViews';
 import * as api from '@/lib/api';
 import { exportCsv, exportXlsx } from '@/lib/export';
 import type { AnnouncementMeta, AnnouncementRow, Company } from '@/lib/types';
@@ -348,6 +349,35 @@ export default function AnnouncementsPage() {
             <p className="mt-3 text-xs text-slate-400">
               {roster.length} companies · {from} → {to}
             </p>
+
+            <div className="mt-3">
+              <SavedViews
+                current={{
+                  source,
+                  index,
+                  selectedScrips,
+                  customCodes,
+                  category,
+                  preset,
+                  keyword,
+                  from,
+                  to,
+                  mode,
+                }}
+                onApply={(f) => {
+                  if (f.source === 'index' || f.source === 'custom') setSource(f.source);
+                  if (typeof f.index === 'string') setIndex(f.index);
+                  if (Array.isArray(f.selectedScrips)) setSelectedScrips(f.selectedScrips);
+                  if (typeof f.customCodes === 'string') setCustomCodes(f.customCodes);
+                  if (typeof f.category === 'string') setCategory(f.category);
+                  if (typeof f.preset === 'string') setPreset(f.preset);
+                  if (typeof f.keyword === 'string') setKeyword(f.keyword);
+                  if (typeof f.from === 'string') setFrom(f.from);
+                  if (typeof f.to === 'string') setTo(f.to);
+                  if (f.mode === 'latest' || f.mode === 'all') setMode(f.mode);
+                }}
+              />
+            </div>
           </div>
 
           {/* ---------------- Results (full width) ---------------- */}

@@ -73,6 +73,7 @@ export default function CompliancePage() {
   const [agmDate, setAgmDate] = useState('');
   const [authority, setAuthority] = useState('All');
   const [hidePast, setHidePast] = useState(true);
+  const [companyType, setCompanyType] = useState('listed');
 
   const [data, setData] = useState<ComplianceResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -83,14 +84,21 @@ export default function CompliancePage() {
     setLoading(true);
     setError(null);
     api
-      .getCompliance({ fy, agmDate: agmDate || undefined })
+      .getCompliance({ fy, agmDate: agmDate || undefined, type: companyType })
       .then((r) => live && setData(r))
       .catch((e) => live && setError(e instanceof Error ? e.message : 'Failed to load'))
       .finally(() => live && setLoading(false));
     return () => {
       live = false;
     };
-  }, [fy, agmDate]);
+  }, [fy, agmDate, companyType]);
+
+  // Authority options depend on the company type — reset a now-empty filter.
+  useEffect(() => {
+    if (authority !== 'All' && data && !data.meta.byAuthority[authority]) {
+      setAuthority('All');
+    }
+  }, [data, authority]);
 
   const today = data?.meta.today || '';
 
@@ -159,6 +167,23 @@ export default function CompliancePage() {
                 </div>
               </div>
 
+              <div className="w-52">
+                <label className="label">Company type</label>
+                <select
+                  className="input"
+                  value={companyType}
+                  onChange={(e) => setCompanyType(e.target.value)}
+                >
+                  {(data?.meta.companyTypes || [{ id: 'listed', label: 'Listed company' }]).map(
+                    (t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </div>
+
               <div className="w-44">
                 <label className="label">AGM date</label>
                 <input
@@ -216,12 +241,22 @@ export default function CompliancePage() {
               </div>
             </div>
 
-            {data?.meta.agmAssumed && (
-              <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-400">
-                <Info className="h-3.5 w-3.5 shrink-0" />
-                AOC-4, MGT-7 and Reg. 34(1) are computed from an assumed AGM on 30 September
-                (the s.96 outer limit). Set the actual AGM date to correct them.
-              </p>
+            {data && (
+              <div className="mt-3 space-y-1.5">
+                <p className="flex items-start gap-1.5 text-xs text-slate-500">
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-500" />
+                  <span>
+                    <b>{data.meta.companyTypeLabel}:</b> {data.meta.companyTypeNote}
+                  </span>
+                </p>
+                {data.meta.agmAssumed && (
+                  <p className="flex items-start gap-1.5 text-xs text-slate-400">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    AGM-linked filings assume an AGM on 30 September (the s.96 outer limit).
+                    Set the actual AGM date to correct them.
+                  </p>
+                )}
+              </div>
             )}
           </div>
 
@@ -246,7 +281,7 @@ export default function CompliancePage() {
                   icon={CalendarClock}
                   tone="brand"
                   value={data.meta.total}
-                  label={`obligations in FY ${data.meta.scope.label}`}
+                  label={`obligations · ${data.meta.companyTypeLabel.toLowerCase()}`}
                 />
                 <Tile
                   icon={Zap}

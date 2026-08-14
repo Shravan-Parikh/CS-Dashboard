@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   Radio,
   Search,
@@ -13,11 +14,17 @@ import {
   FileSpreadsheet,
   FileDown,
   Zap,
+  Star,
+  ArrowRight,
+  Sparkles,
 } from 'lucide-react';
 import Topbar from '@/components/Topbar';
 import ModuleTabs from '@/components/ModuleTabs';
 import CompanyPanel from '@/components/CompanyPanel';
+import WatchlistStar from '@/components/WatchlistStar';
+import AiSummaryModal, { type SummaryTarget } from '@/components/AiSummaryModal';
 import * as api from '@/lib/api';
+import { useWatchlist } from '@/lib/watchlist';
 import { exportLatestCsv, exportLatestXlsx } from '@/lib/export';
 import type { CsBucket, LatestMeta, LatestRow } from '@/lib/types';
 
@@ -57,9 +64,12 @@ function dayLabel(iso: string) {
 }
 
 export default function LatestAnnouncementsPage() {
+  const { companies: watched } = useWatchlist();
+
   const [buckets, setBuckets] = useState<CsBucket[]>([]);
   const [selected, setSelected] = useState<string[]>([]); // empty = all
   const [indices, setIndices] = useState<string[]>(['All']);
+  // 'All' | 'watchlist' | an index name
   const [index, setIndex] = useState('All');
   const [days, setDays] = useState(2);
   const [keyword, setKeyword] = useState('');
@@ -70,6 +80,7 @@ export default function LatestAnnouncementsPage() {
   const [error, setError] = useState<string | null>(null);
   const [panelScrip, setPanelScrip] = useState<string | null>(null);
   const [panelName, setPanelName] = useState<string | undefined>();
+  const [summaryTarget, setSummaryTarget] = useState<SummaryTarget | null>(null);
 
   useEffect(() => {
     api.getCsBuckets().then((r) => setBuckets(r.buckets)).catch(() => {});
@@ -83,7 +94,10 @@ export default function LatestAnnouncementsPage() {
       const res = await api.getLatest({
         days,
         buckets: selected,
-        index,
+        // 'watchlist' narrows the same market-wide sweep to followed companies.
+        ...(index === 'watchlist'
+          ? { scrips: watched.map((c) => c.scrip_code) }
+          : { index }),
         keyword: keyword.trim(),
         limit: 500,
       });
@@ -94,14 +108,20 @@ export default function LatestAnnouncementsPage() {
     } finally {
       setLoading(false);
     }
-  }, [days, selected, index, keyword]);
+  }, [days, selected, index, keyword, watched]);
 
   // Load on mount and whenever the shape of the query changes. Keyword is
   // applied client-side below as well, so it doesn't need to trigger a refetch.
+  const watchKey = index === 'watchlist' ? watched.map((c) => c.scrip_code).join(',') : '';
   useEffect(() => {
+    if (index === 'watchlist' && watched.length === 0) {
+      setRows([]);
+      setMeta(null);
+      return;
+    }
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days, selected, index]);
+  }, [days, selected, index, watchKey]);
 
   const filtered = useMemo(() => {
     if (!rows) return null;
@@ -167,14 +187,20 @@ export default function LatestAnnouncementsPage() {
                 </div>
               </div>
 
-              <div className="w-40">
+              <div className="w-44">
                 <label className="label">Universe</label>
                 <select className="input" value={index} onChange={(e) => setIndex(e.target.value)}>
-                  {indices.map((i) => (
-                    <option key={i} value={i}>
-                      {i === 'All' ? 'Whole market' : i}
-                    </option>
-                  ))}
+                  <option value="All">Whole market</option>
+                  <option value="watchlist">
+                    My companies ({watched.length})
+                  </option>
+                  {indices
+                    .filter((i) => i !== 'All')
+                    .map((i) => (
+                      <option key={i} value={i}>
+                        {i}
+                      </option>
+                    ))}
                 </select>
               </div>
 
@@ -254,7 +280,29 @@ export default function LatestAnnouncementsPage() {
             </div>
           )}
 
-          {filtered && meta && (
+          {/* Watchlist scope with nothing followed yet — explain, don't show zero. */}
+          {index === 'watchlist' && watched.length === 0 && !loading && (
+            <div className="card flex flex-col items-center gap-2 px-6 py-16 text-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                <Star className="h-5 w-5" />
+              </div>
+              <p className="text-sm font-medium text-slate-700">
+                You&apos;re not following any companies yet
+              </p>
+              <p className="max-w-sm text-xs leading-relaxed text-slate-400">
+                Star a company on any row to follow it, or pick several at once from My
+                Companies. Then this view shows only their filings.
+              </p>
+              <Link
+                href="/companies"
+                className="mt-1 inline-flex items-center gap-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+              >
+                Pick my companies <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+          )}
+
+          {filtered && meta && !(index === 'watchlist' && watched.length === 0) && (
             <>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-col gap-1 text-sm text-slate-600">
@@ -264,8 +312,19 @@ export default function LatestAnnouncementsPage() {
                       <b>{filtered.length}</b>
                       {filtered.length !== meta.total && ` of ${meta.total}`} filings ·{' '}
                       {meta.from} → {meta.to}
-                      {index !== 'All' && ` · ${index} only`}
+                      {index === 'watchlist'
+                        ? ' · my companies only'
+                        : index !== 'All' && ` · ${index} only`}
                     </span>
+                    {meta.fetchedAt && (
+                      <span className="text-xs text-slate-400">
+                        updated{' '}
+                        {new Date(meta.fetchedAt).toLocaleTimeString('en-IN', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    )}
                     <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
                       <Zap className="h-3 w-3" />
                       {(meta.elapsedMs / 1000).toFixed(1)}s · {meta.slices} slices
@@ -332,12 +391,19 @@ export default function LatestAnnouncementsPage() {
 
                             <div className="min-w-0 flex-1">
                               <div className="mb-0.5 flex flex-wrap items-center gap-1.5">
+                                <WatchlistStar
+                                  company={{
+                                    scrip_code: r.scrip_code,
+                                    company: r.company,
+                                    symbol: r.symbol,
+                                  }}
+                                />
                                 <button
                                   onClick={() => {
                                     setPanelScrip(r.scrip_code);
                                     setPanelName(r.company);
                                   }}
-                                  className="max-w-[22rem] truncate text-sm font-medium text-slate-800 hover:text-brand-600 hover:underline"
+                                  className="max-w-[16rem] truncate text-sm font-medium text-slate-800 hover:text-brand-600 hover:underline sm:max-w-[22rem]"
                                   title="View this company's full filing timeline"
                                 >
                                   {r.company}
@@ -370,15 +436,25 @@ export default function LatestAnnouncementsPage() {
                             </div>
 
                             {r.pdf_url && (
-                              <a
-                                href={api.pdfProxyUrl(r.pdf_url)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="mt-0.5 inline-flex h-7 shrink-0 items-center gap-1 self-start rounded-md border border-slate-200 px-2 text-[11px] font-medium text-brand-600 hover:bg-brand-50"
-                              >
-                                <FileText className="h-3 w-3" /> PDF
-                                <ExternalLink className="h-2.5 w-2.5" />
-                              </a>
+                              <div className="mt-0.5 flex shrink-0 items-center gap-1 self-start">
+                                <button
+                                  onClick={() => setSummaryTarget(r)}
+                                  title="Get a ready-made prompt to summarise this with Claude or ChatGPT"
+                                  className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 px-2 text-[11px] font-medium text-violet-600 hover:bg-violet-50"
+                                >
+                                  <Sparkles className="h-3 w-3" />
+                                  <span className="hidden sm:inline">Summarise</span>
+                                </button>
+                                <a
+                                  href={api.pdfProxyUrl(r.pdf_url)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 px-2 text-[11px] font-medium text-brand-600 hover:bg-brand-50"
+                                >
+                                  <FileText className="h-3 w-3" /> PDF
+                                  <ExternalLink className="h-2.5 w-2.5" />
+                                </a>
+                              </div>
                             )}
                           </li>
                         ))}
@@ -397,6 +473,7 @@ export default function LatestAnnouncementsPage() {
         fallbackName={panelName}
         onClose={() => setPanelScrip(null)}
       />
+      <AiSummaryModal target={summaryTarget} onClose={() => setSummaryTarget(null)} />
     </>
   );
 }

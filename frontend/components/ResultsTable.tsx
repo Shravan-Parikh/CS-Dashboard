@@ -2,6 +2,7 @@
 
 import { ExternalLink, FileText, Minus, AlertTriangle } from 'lucide-react';
 import { pdfProxyUrl } from '@/lib/api';
+import WatchlistStar from '@/components/WatchlistStar';
 import type { AnnouncementRow } from '@/lib/types';
 
 function fmtDate(iso: string) {
@@ -62,20 +63,32 @@ export default function ResultsTable({
                 )}
               </td>
               <td className="px-3 py-3">
-                {onCompanyClick ? (
-                  <button
-                    onClick={() => onCompanyClick(r.scrip_code, r.company)}
-                    className="text-left font-medium text-slate-800 hover:text-brand-600 hover:underline"
-                    title="View this company's full filing timeline"
-                  >
-                    {r.company}
-                  </button>
-                ) : (
-                  <div className="font-medium text-slate-800">{r.company}</div>
-                )}
-                <div className="text-xs text-slate-400">
-                  {r.symbol ? `${r.symbol} · ` : ''}
-                  {r.scrip_code}
+                <div className="flex items-start gap-1.5">
+                  <WatchlistStar
+                    company={{
+                      scrip_code: r.scrip_code,
+                      company: r.company,
+                      symbol: r.symbol,
+                    }}
+                    className="mt-0.5"
+                  />
+                  <div className="min-w-0">
+                    {onCompanyClick ? (
+                      <button
+                        onClick={() => onCompanyClick(r.scrip_code, r.company)}
+                        className="text-left font-medium text-slate-800 hover:text-brand-600 hover:underline"
+                        title="View this company's full filing timeline"
+                      >
+                        {r.company}
+                      </button>
+                    ) : (
+                      <div className="font-medium text-slate-800">{r.company}</div>
+                    )}
+                    <div className="text-xs text-slate-400">
+                      {r.symbol ? `${r.symbol} · ` : ''}
+                      {r.scrip_code}
+                    </div>
+                  </div>
                 </div>
               </td>
               <td className="whitespace-nowrap px-3 py-3 text-slate-600">

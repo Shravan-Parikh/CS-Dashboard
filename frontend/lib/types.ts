@@ -79,6 +79,8 @@ export interface LatestMeta {
   total: number;
   returned: number;
   truncated: boolean;
+  scoped?: 'market' | 'index' | 'scrips';
+  fetchedAt?: string;
   elapsedMs: number;
 }
 
@@ -162,6 +164,10 @@ export interface ComplianceResponse {
     today: string;
     agmDate: string | null;
     agmAssumed: boolean;
+    companyType: string;
+    companyTypeLabel: string;
+    companyTypeNote: string;
+    companyTypes: { id: string; label: string; note: string }[];
     total: number;
     upcoming: number;
     overdue: number;

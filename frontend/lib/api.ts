@@ -137,6 +137,14 @@ export function me() {
   return request<{ user: User }>('/auth/me');
 }
 
+/** Always resolves for any well-formed address — it never reveals whether an account exists. */
+export function forgotPassword(email: string) {
+  return request<{ ok: true; message: string }>('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
 // --- Workspace (persisted in Firestore) ---
 export interface WatchlistCompany {
   scrip_code: string;
@@ -220,6 +228,8 @@ export interface LatestParams {
   days: number;
   buckets?: string[];
   index?: string;
+  /** Narrow the market-wide sweep to specific scrip codes (e.g. a watchlist). */
+  scrips?: string[];
   keyword?: string;
   limit?: number;
 }
@@ -227,7 +237,8 @@ export interface LatestParams {
 export function getLatest(params: LatestParams) {
   const q = new URLSearchParams({ days: String(params.days) });
   if (params.buckets?.length) q.set('buckets', params.buckets.join(','));
-  if (params.index && params.index !== 'All') q.set('index', params.index);
+  if (params.scrips?.length) q.set('scrips', params.scrips.join(','));
+  else if (params.index && params.index !== 'All') q.set('index', params.index);
   if (params.keyword) q.set('keyword', params.keyword);
   if (params.limit) q.set('limit', String(params.limit));
   return request<LatestResponse>(`/announcements/latest?${q}`);
@@ -241,10 +252,16 @@ export function getCompanyTimeline(scrip: string, months = 12) {
 }
 
 // --- Compliance calendar ---
-export function getCompliance(opts: { fy?: number; agmDate?: string }) {
+export function getCompliance(opts: {
+  fy?: number;
+  agmDate?: string;
+  /** listed | unlisted-public | private | opc — defaults to listed. */
+  type?: string;
+}) {
   const q = new URLSearchParams();
   if (opts.fy !== undefined) q.set('fy', String(opts.fy));
   if (opts.agmDate) q.set('agmDate', opts.agmDate);
+  if (opts.type) q.set('type', opts.type);
   return request<ComplianceResponse>(`/compliance?${q}`);
 }
 
