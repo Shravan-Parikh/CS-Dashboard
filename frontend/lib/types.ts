@@ -178,3 +178,69 @@ export interface ComplianceResponse {
     disclaimer: string;
   };
 }
+
+// --- Law corpus (Know the Law) ---
+
+export interface LawDocument {
+  id: string;
+  title: string;
+  authority: string;
+  kind: string;
+  topics: string[];
+  note?: string;
+  sourcePage: string;
+  pdfUrl: string;
+  pages: number;
+  bytes: number;
+  sha256: string;
+  fetchedAt: string;
+  chars: number;
+  chunkCount: number;
+}
+
+export interface LawCorpusStats {
+  documents: number;
+  chunks: number;
+  topics: string[];
+  authorities: string[];
+  builtAt: string;
+}
+
+export interface LawHit {
+  id: string;
+  docId: string;
+  docTitle: string;
+  authority: string;
+  kind: string;
+  topics: string[];
+  ref: string;
+  heading: string;
+  chapter: string;
+  page: number;
+  score: number;
+  /** Pre-highlighted with <mark> spans; HTML-escaped server-side. */
+  snippet: string;
+}
+
+export interface LawSearchResponse {
+  query: string;
+  results: LawHit[];
+  meta: {
+    total: number;
+    returned: number;
+    tokens: string[];
+    elapsedMs: number;
+    corpus: LawCorpusStats;
+  };
+}
+
+export interface LawChunk {
+  id: string;
+  docId: string;
+  docTitle: string;
+  ref: string;
+  heading: string;
+  chapter: string;
+  page: number;
+  text: string;
+}

@@ -1,5 +1,9 @@
 import type {
   AnnouncementResponse,
+  LawChunk,
+  LawCorpusStats,
+  LawDocument,
+  LawSearchResponse,
   Company,
   CompanyTimelineResponse,
   ComplianceResponse,
@@ -263,6 +267,29 @@ export function getCompliance(opts: {
   if (opts.agmDate) q.set('agmDate', opts.agmDate);
   if (opts.type) q.set('type', opts.type);
   return request<ComplianceResponse>(`/compliance?${q}`);
+}
+
+// --- Know the Law (statutory corpus) ---
+export function getLawDocuments() {
+  return request<{ documents: LawDocument[]; stats: LawCorpusStats }>('/law/documents');
+}
+
+export function searchLaw(params: {
+  q: string;
+  topics?: string[];
+  docs?: string[];
+  limit?: number;
+}) {
+  const qs = new URLSearchParams({ q: params.q });
+  if (params.topics?.length) qs.set('topics', params.topics.join(','));
+  if (params.docs?.length) qs.set('docs', params.docs.join(','));
+  if (params.limit) qs.set('limit', String(params.limit));
+  return request<LawSearchResponse>(`/law/search?${qs}`);
+}
+
+/** Expand a search hit to its full clause text. */
+export function getLawChunk(id: string) {
+  return request<{ chunk: LawChunk }>(`/law/chunk?id=${encodeURIComponent(id)}`);
 }
 
 // --- PDF helpers (go through backend proxy) ---

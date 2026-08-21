@@ -35,7 +35,7 @@ const NAV: NavItem[] = [
   { label: 'Announcements', href: '/announcements', icon: Megaphone },
   { label: 'Compliance Calendar', href: '/compliance', icon: CalendarClock },
   { label: 'My Companies', href: '/companies', icon: Building2, badge: 'watchlist' },
-  { label: 'Laws & Circulars', href: '#', icon: Scale, soon: true },
+  { label: 'Know the Law', href: '/law', icon: Scale },
   { label: 'Resolutions & Templates', href: '#', icon: FileText, soon: true },
   { label: 'Board & Committees', href: '#', icon: Landmark, soon: true },
 ];
