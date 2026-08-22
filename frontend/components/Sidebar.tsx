@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   Megaphone,
   CalendarClock,
+  CheckSquare,
   Scale,
   FileText,
   Landmark,
@@ -31,13 +32,14 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Tasks', href: '/tasks', icon: CheckSquare },
+  { label: 'Board Meetings', href: '/meetings', icon: Landmark },
   { label: 'Latest Filings', href: '/announcements/latest', icon: Radio },
   { label: 'Announcements', href: '/announcements', icon: Megaphone },
   { label: 'Compliance Calendar', href: '/compliance', icon: CalendarClock },
   { label: 'My Companies', href: '/companies', icon: Building2, badge: 'watchlist' },
   { label: 'Know the Law', href: '/law', icon: Scale },
   { label: 'Resolutions & Templates', href: '#', icon: FileText, soon: true },
-  { label: 'Board & Committees', href: '#', icon: Landmark, soon: true },
 ];
 
 /**

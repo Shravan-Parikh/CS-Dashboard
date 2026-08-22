@@ -15,6 +15,10 @@ import {
   Building2,
   RefreshCw,
   Clock,
+  CheckSquare,
+  Landmark,
+  Plus,
+  ListChecks,
 } from 'lucide-react';
 import clsx from 'clsx';
 import Topbar from '@/components/Topbar';
@@ -23,7 +27,7 @@ import WatchlistStar from '@/components/WatchlistStar';
 import * as api from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useWatchlist } from '@/lib/watchlist';
-import type { ComplianceOccurrence, LatestRow } from '@/lib/types';
+import type { BoardMeeting, ComplianceOccurrence, LatestRow, Task } from '@/lib/types';
 
 /** Whole days between two YYYY-MM-DD dates — calendar-based, no TZ drift. */
 function daysUntil(todayIso: string, dueIso: string) {
@@ -82,9 +86,23 @@ export default function DashboardPage() {
   const [feedLoading, setFeedLoading] = useState(false);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
 
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [meetings, setMeetings] = useState<BoardMeeting[]>([]);
+  const [addedTask, setAddedTask] = useState<string | null>(null);
+
   const [panelScrip, setPanelScrip] = useState<string | null>(null);
   const [panelName, setPanelName] = useState<string | undefined>();
   const [reloadKey, setReloadKey] = useState(0);
+
+  // Tasks and meetings — the "what do I have to do" half of the dashboard.
+  useEffect(() => {
+    let live = true;
+    api.getTasks().then((r) => live && setTasks(r.tasks)).catch(() => {});
+    api.getMeetings().then((r) => live && setMeetings(r.meetings)).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [reloadKey]);
 
   // Compliance deadlines
   useEffect(() => {
@@ -149,6 +167,45 @@ export default function DashboardPage() {
     };
   }, [occurrences, today]);
 
+  const openTasks = useMemo(() => tasks.filter((t) => !t.done), [tasks]);
+  const taskDue = useMemo(() => {
+    const rank = (t: Task) => (t.due ? daysUntil(today || t.due, t.due) : 99999);
+    return [...openTasks]
+      .sort((a, b) => rank(a) - rank(b))
+      .slice(0, 6);
+  }, [openTasks, today]);
+  const overdueTasks = useMemo(
+    () => (today ? openTasks.filter((t) => t.due && daysUntil(today, t.due) < 0).length : 0),
+    [openTasks, today],
+  );
+  const nextMeetings = useMemo(
+    () =>
+      [...meetings]
+        .filter((m) => today && m.date >= today && m.status !== 'cancelled')
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(0, 4),
+    [meetings, today],
+  );
+
+  /** Pull a statutory deadline onto the task list, citation attached. */
+  async function deadlineToTask(o: ComplianceOccurrence) {
+    try {
+      const r = await api.createTask({
+        title: o.title,
+        due: o.due,
+        priority: 'normal',
+        source: `compliance:${o.ruleId}@${o.due}`,
+        sourceLabel: o.reference,
+      });
+      setTasks(r.tasks);
+      setAddedTask(r.duplicate ? `Already on your list: ${o.title}` : `Added: ${o.title}`);
+      setTimeout(() => setAddedTask(null), 2500);
+    } catch {
+      setAddedTask('Could not add that to your tasks');
+      setTimeout(() => setAddedTask(null), 2500);
+    }
+  }
+
   const firstName = (user?.name || '').split(' ')[0] || 'there';
 
   return (
@@ -172,8 +229,14 @@ export default function DashboardPage() {
             </p>
           </div>
 
+          {addedTask && (
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
+              <CheckSquare className="h-4 w-4 shrink-0" /> {addedTask}
+            </div>
+          )}
+
           {/* ---------------- Tiles ---------------- */}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             <Tile
               icon={CalendarClock}
               tone="amber"
@@ -196,6 +259,13 @@ export default function DashboardPage() {
               href="/compliance"
             />
             <Tile
+              icon={CheckSquare}
+              tone={overdueTasks > 0 ? 'red' : 'emerald'}
+              value={openTasks.length}
+              label={overdueTasks > 0 ? `open tasks · ${overdueTasks} late` : 'open tasks'}
+              href="/tasks"
+            />
+            <Tile
               icon={Star}
               tone="slate"
               value={wlLoading ? null : watched.length}
@@ -206,6 +276,8 @@ export default function DashboardPage() {
 
           {/* ---------------- Quick actions ---------------- */}
           <div className="flex flex-wrap gap-2">
+            <QuickAction href="/tasks" icon={CheckSquare} label="My tasks" />
+            <QuickAction href="/meetings" icon={Landmark} label="Plan a meeting" />
             <QuickAction href="/announcements/latest" icon={Radio} label="Latest filings" />
             <QuickAction href="/compliance" icon={CalendarClock} label="Compliance calendar" />
             <QuickAction href="/announcements" icon={Search} label="Search a company" />
@@ -355,6 +427,124 @@ export default function DashboardPage() {
             </section>
           </div>
 
+          {/* ---------------- Tasks + meetings ---------------- */}
+          <div className="grid gap-5 lg:grid-cols-2">
+            <section className="card overflow-hidden">
+              <header className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-4 py-2.5">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <ListChecks className="h-4 w-4 text-slate-400" />
+                  My tasks
+                  {openTasks.length > 0 && (
+                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                      {openTasks.length}
+                    </span>
+                  )}
+                </h3>
+                <Link
+                  href="/tasks"
+                  className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
+                >
+                  Open list <ArrowRight className="h-3 w-3" />
+                </Link>
+              </header>
+
+              {taskDue.length === 0 ? (
+                <Empty
+                  icon={CheckSquare}
+                  title="Nothing on your list"
+                  body="Add a task, or send a statutory deadline or a meeting obligation here with the + button — each arrives with its citation."
+                  action={{ href: '/tasks', label: 'Add a task' }}
+                />
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {taskDue.map((t) => {
+                    const n = t.due && today ? daysUntil(today, t.due) : null;
+                    return (
+                      <li key={t.id} className="flex items-center gap-3 px-4 py-2.5">
+                        <span
+                          className={clsx(
+                            'w-16 shrink-0 rounded px-1.5 py-0.5 text-center text-[10px] font-semibold ring-1',
+                            n === null
+                              ? 'bg-slate-50 text-slate-400 ring-slate-200'
+                              : URGENCY[urgencyOf(n)],
+                          )}
+                        >
+                          {n === null ? 'no date' : urgencyLabel(n)}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm text-slate-800">
+                            {t.title}
+                          </span>
+                          {(t.sourceLabel || t.companyName) && (
+                            <span className="text-[11px] text-slate-400">
+                              {[t.companyName, t.sourceLabel].filter(Boolean).join(' · ')}
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+
+            <section className="card overflow-hidden">
+              <header className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-4 py-2.5">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <Landmark className="h-4 w-4 text-slate-400" />
+                  Upcoming meetings
+                </h3>
+                <Link
+                  href="/meetings"
+                  className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
+                >
+                  Plan one <ArrowRight className="h-3 w-3" />
+                </Link>
+              </header>
+
+              {nextMeetings.length === 0 ? (
+                <Empty
+                  icon={Landmark}
+                  title="No meetings planned"
+                  body="Add a board or general meeting date and the notice, intimation, outcome and minutes deadlines are worked out for you."
+                  action={{ href: '/meetings', label: 'Plan a meeting' }}
+                />
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {nextMeetings.map((m) => {
+                    const n = daysUntil(today, m.date);
+                    const pending = m.timeline.filter(
+                      (t) => !m.completed.includes(t.id),
+                    ).length;
+                    return (
+                      <li key={m.id} className="flex items-center gap-3 px-4 py-2.5">
+                        <span className="w-12 shrink-0 text-center">
+                          <span className="block text-sm font-bold leading-none text-slate-900">
+                            {m.date.slice(8, 10)}
+                          </span>
+                          <span className="text-[10px] uppercase text-slate-400">
+                            {new Date(m.date + 'T00:00:00').toLocaleDateString('en-IN', {
+                              month: 'short',
+                            })}
+                          </span>
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm text-slate-800">
+                            {m.title}
+                          </span>
+                          <span className="text-[11px] text-slate-400">
+                            {n === 0 ? 'today' : `in ${n}d`}
+                            {pending > 0 && ` · ${pending} obligation${pending === 1 ? '' : 's'} pending`}
+                          </span>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          </div>
+
           {/* ---------------- Followed companies strip ---------------- */}
           {watched.length > 0 && (
             <section className="card p-4">
@@ -408,6 +598,7 @@ const TONES: Record<string, string> = {
   brand: 'bg-brand-50 text-brand-600',
   amber: 'bg-amber-50 text-amber-600',
   red: 'bg-red-50 text-red-600',
+  emerald: 'bg-emerald-50 text-emerald-600',
   slate: 'bg-slate-100 text-slate-500',
 };
 

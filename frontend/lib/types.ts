@@ -244,3 +244,78 @@ export interface LawChunk {
   page: number;
   text: string;
 }
+
+// --- Tasks & board meetings ---
+
+export interface Task {
+  id: string;
+  title: string;
+  notes: string;
+  due: string;
+  priority: 'low' | 'normal' | 'high';
+  done: boolean;
+  companyScrip: string;
+  companyName: string;
+  /** Provenance, e.g. "compliance:lodr-31-shp@2026-07-21" or "meeting:<id>:<itemId>". */
+  source: string;
+  sourceLabel: string;
+  createdAt: string;
+  completedAt: string;
+}
+
+export interface TimelineItem {
+  id: string;
+  label: string;
+  authority: string;
+  reference: string;
+  phase: 'before' | 'during' | 'after';
+  due: string;
+  offsetDays: number;
+  unit: 'calendar' | 'clear' | 'working';
+  conditional: boolean;
+  note: string;
+  /** Where the statute says working/clear days, or a sub-day deadline. */
+  caution: string;
+}
+
+export interface AgendaItem {
+  id: string;
+  item: string;
+  done: boolean;
+}
+
+export interface Attendee {
+  id: string;
+  name: string;
+  role: string;
+  present: boolean | null;
+}
+
+export interface BoardMeeting {
+  id: string;
+  type: string;
+  status: 'planned' | 'notice-sent' | 'held' | 'cancelled';
+  title: string;
+  date: string;
+  time: string;
+  mode: 'physical' | 'vc' | 'hybrid';
+  venue: string;
+  companyScrip: string;
+  companyName: string;
+  listed: boolean;
+  hasResults: boolean;
+  notes: string;
+  agenda: AgendaItem[];
+  attendees: Attendee[];
+  /** Timeline rule ids already ticked off. */
+  completed: string[];
+  createdAt: string;
+  /** Derived server-side from the date — never stored. */
+  timeline: TimelineItem[];
+}
+
+export interface MeetingType {
+  id: string;
+  label: string;
+  note: string;
+}

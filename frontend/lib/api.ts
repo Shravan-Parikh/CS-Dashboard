@@ -1,5 +1,9 @@
 import type {
   AnnouncementResponse,
+  BoardMeeting,
+  MeetingType,
+  Task,
+  TimelineItem,
   LawChunk,
   LawCorpusStats,
   LawDocument,
@@ -290,6 +294,79 @@ export function searchLaw(params: {
 /** Expand a search hit to its full clause text. */
 export function getLawChunk(id: string) {
   return request<{ chunk: LawChunk }>(`/law/chunk?id=${encodeURIComponent(id)}`);
+}
+
+// --- Tasks ---
+export function getTasks() {
+  return request<{ tasks: Task[] }>('/tasks');
+}
+
+export type TaskInput = Partial<Omit<Task, 'id' | 'createdAt' | 'completedAt'>>;
+
+export function createTask(input: TaskInput) {
+  return request<{ task: Task; tasks: Task[]; duplicate?: boolean }>('/tasks', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateTask(id: string, input: TaskInput) {
+  return request<{ task: Task; tasks: Task[] }>(`/tasks/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteTask(id: string) {
+  return request<{ tasks: Task[] }>(`/tasks/${id}`, { method: 'DELETE' });
+}
+
+export function clearCompletedTasks() {
+  return request<{ tasks: Task[]; removed: number }>('/tasks/clear-completed', {
+    method: 'POST',
+  });
+}
+
+// --- Board meetings ---
+export function getMeetingTypes() {
+  return request<{ types: MeetingType[]; statuses: string[] }>('/meetings/types');
+}
+
+export function getMeetings() {
+  return request<{ meetings: BoardMeeting[] }>('/meetings');
+}
+
+export type MeetingInput = Partial<Omit<BoardMeeting, 'id' | 'createdAt' | 'timeline'>>;
+
+export function createMeeting(input: MeetingInput) {
+  return request<{ meeting: BoardMeeting }>('/meetings', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateMeeting(id: string, input: MeetingInput) {
+  return request<{ meeting: BoardMeeting }>(`/meetings/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteMeeting(id: string) {
+  return request<{ ok: true }>(`/meetings/${id}`, { method: 'DELETE' });
+}
+
+/** Preview the statutory timeline for a date before committing to it. */
+export function previewTimeline(params: {
+  date: string;
+  type: string;
+  hasResults?: boolean;
+  listed?: boolean;
+}) {
+  const q = new URLSearchParams({ date: params.date, type: params.type });
+  if (params.hasResults) q.set('hasResults', 'true');
+  if (params.listed === false) q.set('listed', 'false');
+  return request<{ timeline: TimelineItem[] }>(`/meetings/timeline?${q}`);
 }
 
 // --- PDF helpers (go through backend proxy) ---
