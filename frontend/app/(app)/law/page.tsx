@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Scale,
   Search,
@@ -46,6 +47,7 @@ export default function KnowTheLawPage() {
   const [chunkLoading, setChunkLoading] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const params = useSearchParams();
 
   useEffect(() => {
     api
@@ -78,6 +80,50 @@ export default function KnowTheLawPage() {
     },
     [topics, docs],
   );
+
+  /**
+   * Citation chips on a case order link here. `?ref=` is an exact provision
+   * lookup (scoped by `?docs=`, since "Regulation 3" means something different
+   * in PIT, LODR and SAST); `?q=` is an ordinary search.
+   */
+  useEffect(() => {
+    const ref = params.get('ref');
+    const docScope = params.get('docs');
+    if (ref) {
+      setQuery(ref);
+      setLoading(true);
+      setError(null);
+      api
+        .lookupLaw(ref, docScope ? docScope.split(',') : undefined)
+        .then((r) => {
+          if (r.results.length === 0) {
+            setError(`No provision found for “${ref}”.`);
+            setRes(null);
+            return;
+          }
+          setRes({
+            query: ref,
+            results: r.results,
+            meta: {
+              total: r.meta.total,
+              returned: r.results.length,
+              tokens: [],
+              elapsedMs: 0,
+              corpus: { documents: 0, chunks: 0, topics: [], authorities: [], builtAt: '' },
+            },
+          });
+        })
+        .catch(() => setError('Could not load that provision'))
+        .finally(() => setLoading(false));
+      return;
+    }
+    const incoming = params.get('q');
+    if (incoming) {
+      setQuery(incoming);
+      run(incoming);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
 
   // Re-run when filters change, but only if there's already a query.
   useEffect(() => {

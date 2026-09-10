@@ -16,6 +16,7 @@ import clsx from 'clsx';
 import Topbar from '@/components/Topbar';
 import * as api from '@/lib/api';
 import { useWatchlist } from '@/lib/watchlist';
+import { useTasks, todayIso, daysUntil as daysBetween } from '@/lib/tasks';
 import type { Task } from '@/lib/types';
 
 const PRIORITY_STYLE: Record<string, string> = {
@@ -24,18 +25,8 @@ const PRIORITY_STYLE: Record<string, string> = {
   low: 'bg-slate-50 text-slate-400 ring-slate-200',
 };
 
-const todayIso = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate(),
-  ).padStart(2, '0')}`;
-};
-
 function daysUntil(due: string) {
-  if (!due) return null;
-  const a = new Date(todayIso() + 'T00:00:00');
-  const b = new Date(due + 'T00:00:00');
-  return Math.round((b.getTime() - a.getTime()) / 86_400_000);
+  return due ? daysBetween(due, todayIso()) : null;
 }
 
 function dueLabel(due: string) {
@@ -66,8 +57,16 @@ type Filter = 'open' | 'today' | 'overdue' | 'done' | 'all';
 export default function TasksPage() {
   const { companies } = useWatchlist();
 
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Shared with the sidebar badge and the dashboard, so a write here updates
+  // the nav immediately instead of after a reload.
+  const {
+    tasks,
+    loading,
+    create,
+    toggle: toggleTask,
+    remove: removeTask,
+    clearCompleted,
+  } = useTasks();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('open');
@@ -79,22 +78,6 @@ export default function TasksPage() {
   const [scrip, setScrip] = useState('');
   const [adding, setAdding] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const r = await api.getTasks();
-      setTasks(r.tasks);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load your tasks');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
   async function add(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
@@ -102,14 +85,13 @@ export default function TasksPage() {
     setError(null);
     try {
       const picked = companies.find((c) => c.scrip_code === scrip);
-      const r = await api.createTask({
+      await create({
         title: title.trim(),
         due,
         priority,
         companyScrip: scrip,
         companyName: picked?.company || '',
       });
-      setTasks(r.tasks);
       setTitle('');
       setDue('');
       setPriority('normal');
@@ -122,24 +104,14 @@ export default function TasksPage() {
 
   async function toggle(t: Task) {
     setBusy(t.id);
-    // Optimistic — a checkbox that lags feels broken.
-    setTasks((cur) => cur.map((x) => (x.id === t.id ? { ...x, done: !x.done } : x)));
-    try {
-      const r = await api.updateTask(t.id, { done: !t.done });
-      setTasks(r.tasks);
-    } catch {
-      setTasks((cur) => cur.map((x) => (x.id === t.id ? { ...x, done: t.done } : x)));
-      setError('Could not save that change');
-    } finally {
-      setBusy(null);
-    }
+    await toggleTask(t);
+    setBusy(null);
   }
 
   async function remove(t: Task) {
     setBusy(t.id);
     try {
-      const r = await api.deleteTask(t.id);
-      setTasks(r.tasks);
+      await removeTask(t.id);
     } catch {
       setError('Could not delete that task');
     } finally {
@@ -151,8 +123,7 @@ export default function TasksPage() {
     const n = tasks.filter((t) => t.done).length;
     if (n === 0 || !confirm(`Remove ${n} completed task${n === 1 ? '' : 's'}?`)) return;
     try {
-      const r = await api.clearCompletedTasks();
-      setTasks(r.tasks);
+      await clearCompleted();
     } catch {
       setError('Could not clear completed tasks');
     }

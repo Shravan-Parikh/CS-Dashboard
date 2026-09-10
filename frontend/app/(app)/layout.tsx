@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { WatchlistProvider } from '@/lib/watchlist';
+import { TasksProvider } from '@/lib/tasks';
 import Sidebar from '@/components/Sidebar';
 import { MenuContext } from '@/components/Topbar';
 
@@ -36,6 +37,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <WatchlistProvider>
+      <TasksProvider>
       <MenuContext.Provider value={{ openMenu: () => setMenuOpen(true) }}>
         <div className="flex h-screen overflow-hidden">
           <Sidebar open={menuOpen} onClose={() => setMenuOpen(false)} />
@@ -43,6 +45,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
         </div>
       </MenuContext.Provider>
+      </TasksProvider>
     </WatchlistProvider>
   );
 }

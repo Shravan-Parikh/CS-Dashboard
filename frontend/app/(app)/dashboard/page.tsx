@@ -27,6 +27,7 @@ import WatchlistStar from '@/components/WatchlistStar';
 import * as api from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useWatchlist } from '@/lib/watchlist';
+import { useTasks } from '@/lib/tasks';
 import type { BoardMeeting, ComplianceOccurrence, LatestRow, Task } from '@/lib/types';
 
 /** Whole days between two YYYY-MM-DD dates — calendar-based, no TZ drift. */
@@ -86,7 +87,9 @@ export default function DashboardPage() {
   const [feedLoading, setFeedLoading] = useState(false);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
 
-  const [tasks, setTasks] = useState<Task[]>([]);
+  // Tasks come from the shared provider, so the sidebar badge updates the
+  // moment a deadline is pulled onto the list from here.
+  const { tasks, create: createTask } = useTasks();
   const [meetings, setMeetings] = useState<BoardMeeting[]>([]);
   const [addedTask, setAddedTask] = useState<string | null>(null);
 
@@ -94,10 +97,8 @@ export default function DashboardPage() {
   const [panelName, setPanelName] = useState<string | undefined>();
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Tasks and meetings — the "what do I have to do" half of the dashboard.
   useEffect(() => {
     let live = true;
-    api.getTasks().then((r) => live && setTasks(r.tasks)).catch(() => {});
     api.getMeetings().then((r) => live && setMeetings(r.meetings)).catch(() => {});
     return () => {
       live = false;
@@ -190,14 +191,13 @@ export default function DashboardPage() {
   /** Pull a statutory deadline onto the task list, citation attached. */
   async function deadlineToTask(o: ComplianceOccurrence) {
     try {
-      const r = await api.createTask({
+      const r = await createTask({
         title: o.title,
         due: o.due,
         priority: 'normal',
         source: `compliance:${o.ruleId}@${o.due}`,
         sourceLabel: o.reference,
       });
-      setTasks(r.tasks);
       setAddedTask(r.duplicate ? `Already on your list: ${o.title}` : `Added: ${o.title}`);
       setTimeout(() => setAddedTask(null), 2500);
     } catch {

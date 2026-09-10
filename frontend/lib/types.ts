@@ -337,6 +337,13 @@ export interface CaseOrder {
   year: number;
   month: string;
   period: string;
+  /** The date the order was signed, where it could be read from the text. */
+  orderDate: string;
+  dateExact: boolean;
+  /** SEBI's own reference, e.g. "Order/JS/YK/2026-27/32473". */
+  orderNo: string;
+  /** What the price-sensitive information was. */
+  upsi: string[];
   company: string;
   subject: string;
   penalty: number;
@@ -357,6 +364,7 @@ export interface CaseFacets {
   orderTypes: Record<string, number>;
   outcomes: Record<string, number>;
   bands: Record<string, number>;
+  upsi: Record<string, number>;
 }
 
 export interface CaseStats {
@@ -369,6 +377,9 @@ export interface CaseStats {
   authorities: string[];
   orderTypes: { id: string; label: string }[];
   outcomes: { id: string; label: string }[];
+  upsi: { id: string; label: string; count: number }[];
+  withExactDate: number;
+  withOrderNo: number;
   penaltyBands: { id: string; label: string; min: number; max: number }[];
   citations: { id: string; count: number }[];
   totalPenalty: number;

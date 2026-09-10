@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { AnnouncementRow, ComplianceOccurrence, LatestRow } from './types';
+import type { AnnouncementRow, CaseOrder, ComplianceOccurrence, LatestRow } from './types';
 
 const COLUMNS: { key: keyof AnnouncementRow; label: string }[] = [
   { key: 'company', label: 'Company' },
@@ -162,6 +162,40 @@ export function exportComplianceXlsx(rows: ComplianceOccurrence[], filename: str
     COMPLIANCE_COLS,
     [12, 48, 18, 32, 12, 16, 14, 70],
     'Compliance Calendar',
+    filename,
+  );
+}
+
+// --- PIT case law ---
+
+const rupees = (n: number) => (n ? n.toLocaleString('en-IN') : '');
+
+const CASE_COLS: Column<CaseOrder>[] = [
+  { label: 'Date', get: (c) => c.orderDate || c.period },
+  { label: 'Order No.', get: (c) => c.orderNo },
+  { label: 'Forum', get: (c) => c.authority },
+  { label: 'Order Type', get: (c) => c.orderTypeLabel },
+  { label: 'Company / Party', get: (c) => c.company || c.subject },
+  { label: 'Outcome', get: (c) => c.outcome },
+  { label: 'Penalty (Rs)', get: (c) => rupees(c.penalty) },
+  { label: 'Penalty Detected', get: (c) => (c.penaltyDetected ? 'Yes' : 'No') },
+  { label: 'UPSI', get: (c) => (c.upsi || []).join('; ') },
+  { label: 'Provisions Cited', get: (c) => (c.citations || []).join('; ') },
+  { label: 'Title', get: (c) => c.title },
+  { label: 'Order PDF', get: (c) => c.pdfUrl },
+  { label: 'SEBI Page', get: (c) => c.url },
+];
+
+export function exportCasesCsv(rows: CaseOrder[], filename: string) {
+  writeCsv(rows, CASE_COLS, filename);
+}
+
+export function exportCasesXlsx(rows: CaseOrder[], filename: string) {
+  writeXlsx(
+    rows,
+    CASE_COLS,
+    [12, 28, 8, 20, 34, 14, 16, 10, 26, 44, 70, 60, 60],
+    'PIT Case Law',
     filename,
   );
 }

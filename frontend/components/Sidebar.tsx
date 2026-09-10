@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { useWatchlist } from '@/lib/watchlist';
+import { useTasks } from '@/lib/tasks';
 
 interface NavItem {
   label: string;
@@ -28,12 +29,12 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
   soon?: boolean;
   /** Renders a live count badge (currently only the watchlist). */
-  badge?: 'watchlist';
+  badge?: 'watchlist' | 'tasks';
 }
 
 const NAV: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Tasks', href: '/tasks', icon: CheckSquare },
+  { label: 'Tasks', href: '/tasks', icon: CheckSquare, badge: 'tasks' },
   { label: 'Board Meetings', href: '/meetings', icon: Landmark },
   { label: 'Latest Filings', href: '/announcements/latest', icon: Radio },
   { label: 'Announcements', href: '/announcements', icon: Megaphone },
@@ -57,6 +58,7 @@ export default function Sidebar({
 }) {
   const pathname = usePathname();
   const { companies } = useWatchlist();
+  const { pending, overdue } = useTasks();
 
   return (
     <>
@@ -101,7 +103,11 @@ export default function Sidebar({
           {NAV.map((item) => {
             const active = pathname === item.href;
             const Icon = item.icon;
-            const count = item.badge === 'watchlist' ? companies.length : 0;
+            const count =
+              item.badge === 'watchlist' ? companies.length : item.badge === 'tasks' ? pending : 0;
+            // Overdue work should read as urgent from the nav, without having
+            // to open the page to find out.
+            const urgent = item.badge === 'tasks' && overdue > 0;
             const content = (
               <div
                 className={clsx(
@@ -120,7 +126,18 @@ export default function Sidebar({
                     <Lock className="h-3 w-3" /> Soon
                   </span>
                 ) : count > 0 ? (
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                  <span
+                    title={
+                      urgent
+                        ? `${overdue} overdue of ${count} open`
+                        : `${count} open`
+                    }
+                    className={clsx(
+                      'flex min-w-[20px] items-center justify-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                      urgent ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500',
+                    )}
+                  >
+                    {urgent && <span className="h-1.5 w-1.5 rounded-full bg-red-500" />}
                     {count}
                   </span>
                 ) : null}

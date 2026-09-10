@@ -10,6 +10,7 @@ import type {
   LawChunk,
   LawCorpusStats,
   LawDocument,
+  LawHit,
   LawSearchResponse,
   Company,
   CompanyTimelineResponse,
@@ -294,6 +295,18 @@ export function searchLaw(params: {
   return request<LawSearchResponse>(`/law/search?${qs}`);
 }
 
+/**
+ * Jump to a provision by reference. Scope with `docs` — "Regulation 3" exists in
+ * PIT, LODR and SAST and means something different in each.
+ */
+export function lookupLaw(ref: string, docs?: string[]) {
+  const q = new URLSearchParams({ ref });
+  if (docs?.length) q.set('docs', docs.join(','));
+  return request<{ ref: string; results: LawHit[]; meta: { total: number } }>(
+    `/law/lookup?${q}`,
+  );
+}
+
 /** Expand a search hit to its full clause text. */
 export function getLawChunk(id: string) {
   return request<{ chunk: LawChunk }>(`/law/chunk?id=${encodeURIComponent(id)}`);
@@ -381,6 +394,9 @@ export interface CaseQuery {
   outcomes?: string[];
   bands?: string[];
   citations?: string[];
+  upsi?: string[];
+  /** Company names to cross-reference (typically the user's watchlist). */
+  companies?: string[];
   company?: string;
   sort?: 'recent' | 'relevance' | 'penalty' | 'oldest';
   limit?: number;
@@ -397,7 +413,9 @@ export function getCaseFacets() {
 export function searchCases(p: CaseQuery) {
   const q = new URLSearchParams();
   if (p.q) q.set('q', p.q);
-  for (const k of ['years', 'authorities', 'orderTypes', 'outcomes', 'bands', 'citations'] as const) {
+  for (const k of [
+    'years', 'authorities', 'orderTypes', 'outcomes', 'bands', 'citations', 'upsi', 'companies',
+  ] as const) {
     const v = p[k];
     if (v?.length) q.set(k, v.join(','));
   }

@@ -18,10 +18,18 @@ import {
   ChevronDown,
   ChevronUp,
   Plus,
+  Star,
+  FileSpreadsheet,
+  FileDown,
+  Scale,
 } from 'lucide-react';
+import Link from 'next/link';
 import clsx from 'clsx';
 import Topbar from '@/components/Topbar';
 import * as api from '@/lib/api';
+import { useWatchlist } from '@/lib/watchlist';
+import { useTasks } from '@/lib/tasks';
+import { exportCasesCsv, exportCasesXlsx } from '@/lib/export';
 import type { CaseOrder, CaseStats } from '@/lib/types';
 
 const EXAMPLES = [
@@ -32,6 +40,15 @@ const EXAMPLES = [
   'trading plan',
   'designated person',
 ];
+
+const OUTCOME_LABEL: Record<string, string> = {
+  penalty: 'Penalty imposed',
+  settled: 'Settled',
+  warning: 'Warning / caution',
+  disposed: 'Disposed / dismissed',
+  exonerated: 'Exonerated',
+  unclear: 'Not determined',
+};
 
 const OUTCOME_STYLE: Record<string, string> = {
   penalty: 'bg-red-50 text-red-700',
@@ -50,6 +67,39 @@ function inr(n: number) {
   return `₹${n.toLocaleString('en-IN')}`;
 }
 
+const fmtExact = (iso: string) =>
+  new Date(iso + 'T00:00:00').toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+
+const PIT_DOC = 'sebi-pit-regulations-2015';
+
+/**
+ * Where a citation chip should link, or null if we don't hold that instrument.
+ *
+ * A numbered PIT provision becomes an exact `ref` lookup scoped to the PIT
+ * document — a fuzzy search for "regulation 9" finds nothing (the tokenizer
+ * drops both words), and an unscoped lookup would surface SAST's Regulation 9
+ * instead. SEBI Act sections are deliberately not linked: the Act isn't in the
+ * corpus, so any link would land somewhere misleading.
+ */
+function lawLinkFor(citation: string): string | null {
+  const reg = /^PIT (Reg\.|Schedule)\s*(\S+)$/.exec(citation);
+  if (reg) {
+    const ref = reg[1] === 'Schedule' ? `Schedule ${reg[2]}` : `Regulation ${reg[2]}`;
+    return `/law?ref=${encodeURIComponent(ref)}&docs=${PIT_DOC}`;
+  }
+  if (/^SEBI Act s\./.test(citation)) return null;
+  const phrase =
+    citation.startsWith('SDD') ? 'structured digital database' : citation;
+  return `/law?q=${encodeURIComponent(phrase)}`;
+}
+
+const upsiLabel = (stats: CaseStats | null, id: string) =>
+  stats?.upsi?.find((u) => u.id === id)?.label || id;
+
 const fmtPeriod = (p: string) => {
   if (!p) return '';
   const [y, m] = p.split('-');
@@ -61,6 +111,7 @@ const fmtPeriod = (p: string) => {
 };
 
 export default function CaseLawPage() {
+  const { companies: watched } = useWatchlist();
   const [stats, setStats] = useState<CaseStats | null>(null);
   const [query, setQuery] = useState('');
   const [submitted, setSubmitted] = useState('');
@@ -70,12 +121,15 @@ export default function CaseLawPage() {
   const [outcomes, setOutcomes] = useState<string[]>([]);
   const [bands, setBands] = useState<string[]>([]);
   const [citations, setCitations] = useState<string[]>([]);
+  const [upsi, setUpsi] = useState<string[]>([]);
   const [years, setYears] = useState<string[]>([]);
+  const [mineOnly, setMineOnly] = useState(false);
   const [sort, setSort] = useState<'recent' | 'relevance' | 'penalty' | 'oldest'>('recent');
   const [showFilters, setShowFilters] = useState(false);
 
   const [results, setResults] = useState<CaseOrder[]>([]);
   const [total, setTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,21 +144,32 @@ export default function CaseLawPage() {
       .catch(() => setError('Could not load the case corpus'));
   }, []);
 
+  const PAGE = 25;
+
+  const buildQuery = useCallback(
+    (offset: number): api.CaseQuery => ({
+      q: submitted,
+      orderTypes,
+      authorities,
+      outcomes,
+      bands,
+      citations,
+      upsi,
+      years,
+      // Cross-reference against the companies this CS actually acts for.
+      companies: mineOnly ? watched.map((c) => c.company).filter(Boolean) : [],
+      sort,
+      limit: PAGE,
+      offset,
+    }),
+    [submitted, orderTypes, authorities, outcomes, bands, citations, upsi, years, mineOnly, watched, sort],
+  );
+
   const run = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const r = await api.searchCases({
-        q: submitted,
-        orderTypes,
-        authorities,
-        outcomes,
-        bands,
-        citations,
-        years,
-        sort,
-        limit: 40,
-      });
+      const r = await api.searchCases(buildQuery(0));
       setResults(r.results);
       setTotal(r.meta.total);
       setElapsed(r.meta.elapsedMs);
@@ -113,18 +178,45 @@ export default function CaseLawPage() {
     } finally {
       setLoading(false);
     }
-  }, [submitted, orderTypes, authorities, outcomes, bands, citations, years, sort]);
+  }, [buildQuery]);
 
   useEffect(() => {
     run();
   }, [run]);
+
+  /** Append the next page — without this, anything past the first page is unreachable. */
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const r = await api.searchCases(buildQuery(results.length));
+      setResults((cur) => [...cur, ...r.results]);
+      setTotal(r.meta.total);
+    } catch {
+      setError('Could not load more orders');
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  /** Export needs the whole filtered set, not just what's on screen. */
+  async function exportAll(kind: 'csv' | 'xlsx') {
+    try {
+      const r = await api.searchCases({ ...buildQuery(0), limit: 100 });
+      const stamp = new Date().toISOString().slice(0, 10);
+      const name = `pit_case_law_${stamp}`;
+      if (kind === 'csv') exportCasesCsv(r.results, `${name}.csv`);
+      else exportCasesXlsx(r.results, `${name}.xlsx`);
+    } catch {
+      setError('Export failed');
+    }
+  }
 
   const toggle = (list: string[], set: (v: string[]) => void, v: string) =>
     set(list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
   const activeFilters =
     orderTypes.length + authorities.length + outcomes.length + bands.length +
-    citations.length + years.length;
+    citations.length + years.length + upsi.length + (mineOnly ? 1 : 0);
 
   function clearAll() {
     setOrderTypes([]);
@@ -132,10 +224,25 @@ export default function CaseLawPage() {
     setOutcomes([]);
     setBands([]);
     setCitations([]);
+    setUpsi([]);
     setYears([]);
+    setMineOnly(false);
   }
 
-  const topCitations = useMemo(() => (stats?.citations || []).slice(0, 14), [stats]);
+  /**
+   * Boilerplate citations make useless filters: PIT Reg. 2 is *definitions* and
+   * appears in nearly every order, so it partitions nothing. The behavioural
+   * ones — trading window, SDD, contra trade, pre-clearance — are what a CS
+   * actually filters on, so those come first.
+   */
+  const topCitations = useMemo(() => {
+    const all = stats?.citations || [];
+    const BOILERPLATE = ['PIT Reg. 2', 'PIT Reg. 1'];
+    const behavioural = ['Trading window', 'SDD (Reg. 3(5))', 'Contra trade', 'Pre-clearance'];
+    const rank = (id: string) =>
+      behavioural.includes(id) ? 0 : BOILERPLATE.includes(id) ? 2 : 1;
+    return [...all].sort((a, b) => rank(a.id) - rank(b.id) || b.count - a.count).slice(0, 14);
+  }, [stats]);
 
   return (
     <>
@@ -224,15 +331,49 @@ export default function CaseLawPage() {
                 </button>
               )}
 
-              {stats && (
-                <span className="ml-auto text-[11px] text-slate-400">
-                  {stats.count} orders · {stats.range?.from}–{stats.range?.to}
-                </span>
+              {watched.length > 0 && (
+                <button
+                  onClick={() => setMineOnly((v) => !v)}
+                  title="Only orders naming a company you follow"
+                  className={clsx(
+                    'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition',
+                    mineOnly
+                      ? 'border-amber-200 bg-amber-50 text-amber-700'
+                      : 'border-slate-200 text-slate-600 hover:bg-slate-50',
+                  )}
+                >
+                  <Star className="h-3.5 w-3.5" fill={mineOnly ? 'currentColor' : 'none'} />
+                  My companies
+                </button>
               )}
+
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={() => exportAll('xlsx')}
+                  disabled={total === 0}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5" /> Excel
+                </button>
+                <button
+                  onClick={() => exportAll('csv')}
+                  disabled={total === 0}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  <FileDown className="h-3.5 w-3.5" /> CSV
+                </button>
+              </div>
             </div>
 
             {showFilters && stats && (
               <div className="mt-3 space-y-3 border-t border-slate-100 pt-3">
+                <FilterRow label="UPSI was">
+                  {(stats.upsi || []).map((u) => (
+                    <Chip key={u.id} on={upsi.includes(u.id)} onClick={() => toggle(upsi, setUpsi, u.id)}>
+                      {u.label} <span className="opacity-50">{u.count}</span>
+                    </Chip>
+                  ))}
+                </FilterRow>
                 <FilterRow label="Order type">
                   {stats.orderTypes.map((t) => (
                     <Chip
@@ -349,7 +490,7 @@ export default function CaseLawPage() {
                           OUTCOME_STYLE[c.outcome],
                         )}
                       >
-                        {c.outcome}
+                        {OUTCOME_LABEL[c.outcome] || c.outcome}
                       </span>
                       {c.penaltyDetected && (
                         <span className="inline-flex items-center gap-0.5 rounded bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">
@@ -357,7 +498,12 @@ export default function CaseLawPage() {
                           {inr(c.penalty).replace('₹', '')}
                         </span>
                       )}
-                      <span className="text-[11px] text-slate-400">{fmtPeriod(c.period)}</span>
+                      <span className="text-[11px] font-medium text-slate-500">
+                        {c.orderDate ? fmtExact(c.orderDate) : fmtPeriod(c.period)}
+                      </span>
+                      {c.orderNo && (
+                        <span className="font-mono text-[10px] text-slate-400">{c.orderNo}</span>
+                      )}
                       <span className="text-[11px] text-slate-300">{c.pages}p</span>
                     </div>
 
@@ -375,37 +521,63 @@ export default function CaseLawPage() {
                       />
                     )}
 
-                    {c.citations.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {c.citations.slice(0, 7).map((x) => (
-                          <span
-                            key={x}
-                            className="rounded bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500"
-                          >
-                            {x}
-                          </span>
-                        ))}
-                        {c.citations.length > 7 && (
-                          <span className="text-[10px] text-slate-400">
-                            +{c.citations.length - 7}
-                          </span>
-                        )}
-                      </div>
-                    )}
+                    <div className="mt-2 flex flex-wrap items-center gap-1">
+                      {(c.upsi || []).map((u) => (
+                        <span
+                          key={u}
+                          className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700"
+                        >
+                          {upsiLabel(stats, u)}
+                        </span>
+                      ))}
+                      {c.citations.slice(0, 6).map((x) => (
+                        <span
+                          key={x}
+                          className="rounded bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500"
+                        >
+                          {x}
+                        </span>
+                      ))}
+                      {c.citations.length > 6 && (
+                        <span className="text-[10px] text-slate-400">
+                          +{c.citations.length - 6}
+                        </span>
+                      )}
+                    </div>
                   </button>
                 </li>
               ))}
             </ul>
           )}
 
+          {results.length < total && (
+            <button
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="btn-secondary w-full"
+            >
+              {loadingMore ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+              Load {Math.min(25, total - results.length)} more · {results.length} of {total}
+            </button>
+          )}
+
           <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-800">
             <Gavel className="mt-0.5 h-4 w-4 shrink-0" />
-            Orders are SEBI&apos;s own published PDFs, with order type, penalty and citations
-            extracted from the text by pattern rules — treat penalty figures as{' '}
-            <b>detected, not certified</b>, and read the order before relying on it.
-            {stats?.cappedWindows ? (
-              <> {stats.cappedWindows} search window(s) hit SEBI&apos;s row cap, so a few orders may be missing.</>
-            ) : null}
+            <span>
+              <b>{stats?.count ?? 0} orders found</b> ({stats?.range?.from}–{stats?.range?.to}) —{' '}
+              <b>not an exhaustive set</b>. They are discovered from SEBI&apos;s own order
+              titles, so a PIT case titled only “Adjudication Order in respect of …” will
+              not appear. Order type, penalty, UPSI and citations are extracted from the
+              text by pattern rules: treat the penalty as <b>detected, not certified</b>,
+              and read the order before relying on it.
+              {stats?.cappedWindows ? (
+                <> {stats.cappedWindows} search window(s) hit SEBI&apos;s row cap.</>
+              ) : null}
+            </span>
           </p>
         </div>
       </div>
@@ -480,11 +652,13 @@ function CaseDrawer({
   preview: CaseOrder | null;
   onClose: () => void;
 }) {
+  const { create: createTask } = useTasks();
   const [full, setFull] = useState<CaseOrder | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showText, setShowText] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
+  const [citeCopied, setCiteCopied] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -492,6 +666,7 @@ function CaseDrawer({
       setShowText(false);
       setCopied(false);
       setAdded(null);
+      setCiteCopied(false);
       return;
     }
     let live = true;
@@ -512,6 +687,25 @@ function CaseDrawer({
   const c = full || preview;
   if (!id || !c) return null;
 
+  /** A citation in the form a CS would paste into a note or a board paper. */
+  async function copyCitation() {
+    const c2 = c!;
+    const parts = [
+      c2.company || c2.subject || '',
+      c2.orderNo ? `(${c2.orderNo})` : '',
+      c2.authority,
+      c2.orderTypeLabel,
+      c2.orderDate ? `dated ${fmtExact(c2.orderDate)}` : fmtPeriod(c2.period),
+    ].filter(Boolean);
+    try {
+      await navigator.clipboard.writeText(`${parts.join(', ')}. ${c2.pdfUrl}`);
+      setCiteCopied(true);
+      setTimeout(() => setCiteCopied(false), 2000);
+    } catch {
+      setCiteCopied(false);
+    }
+  }
+
   async function copyPrompt() {
     try {
       await navigator.clipboard.writeText(casePrompt(c!));
@@ -524,7 +718,7 @@ function CaseDrawer({
 
   async function addTask() {
     try {
-      const r = await api.createTask({
+      const r = await createTask({
         title: `Review order: ${(c!.company || c!.subject || c!.title).slice(0, 120)}`,
         priority: 'normal',
         source: `case:${c!.id}`,
@@ -552,13 +746,23 @@ function CaseDrawer({
                 {c.orderTypeLabel}
               </span>
               <span className="text-[11px] text-slate-400">
-                {fmtPeriod(c.period)} · {c.pages} pages
+                {c.orderDate ? fmtExact(c.orderDate) : fmtPeriod(c.period)} · {c.pages} pages
               </span>
             </div>
             <h2 className="text-base font-semibold text-slate-900">
               {c.company || c.subject || 'Order'}
             </h2>
             <p className="mt-0.5 text-xs leading-snug text-slate-500">{c.title}</p>
+            {c.orderNo && (
+              <p className="mt-1 font-mono text-[11px] text-slate-400">{c.orderNo}</p>
+            )}
+            <button
+              onClick={copyCitation}
+              title="Copy a citation you can paste into a board note"
+              className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 hover:text-brand-700"
+            >
+              {citeCopied ? <><Check className="h-3 w-3" /> Citation copied</> : <><Copy className="h-3 w-3" /> Copy citation</>}
+            </button>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100" aria-label="Close">
             <X className="h-5 w-5" />
@@ -567,7 +771,7 @@ function CaseDrawer({
 
         <div className="flex-1 overflow-y-auto">
           <div className="grid grid-cols-2 gap-3 border-b border-slate-100 px-5 py-4 sm:grid-cols-4">
-            <Fact label="Outcome" value={c.outcome} />
+            <Fact label="Outcome" value={OUTCOME_LABEL[c.outcome] || c.outcome} />
             <Fact
               label="Penalty"
               value={c.penaltyDetected ? inr(c.penalty) : 'Not detected'}
@@ -583,12 +787,32 @@ function CaseDrawer({
                 Provisions cited
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {c.citations.map((x) => (
-                  <span key={x} className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                    {x}
-                  </span>
-                ))}
+                {c.citations.map((x) => {
+                  const href = lawLinkFor(x);
+                  return href ? (
+                    <Link
+                      key={x}
+                      href={href}
+                      title={`Read ${x} in Know the Law`}
+                      className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600 transition hover:bg-brand-50 hover:text-brand-700"
+                    >
+                      <Scale className="h-3 w-3 opacity-50" />
+                      {x}
+                    </Link>
+                  ) : (
+                    <span
+                      key={x}
+                      title="The SEBI Act isn't in the document library yet"
+                      className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500"
+                    >
+                      {x}
+                    </span>
+                  );
+                })}
               </div>
+              <p className="mt-1.5 text-[11px] text-slate-400">
+                Click a PIT provision to read its text in Know the Law.
+              </p>
             </div>
           )}
 
