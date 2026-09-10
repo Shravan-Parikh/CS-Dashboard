@@ -1,5 +1,8 @@
 import type {
   AnnouncementResponse,
+  CaseOrder,
+  CaseSearchResponse,
+  CaseStats,
   BoardMeeting,
   MeetingType,
   Task,
@@ -367,6 +370,47 @@ export function previewTimeline(params: {
   if (params.hasResults) q.set('hasResults', 'true');
   if (params.listed === false) q.set('listed', 'false');
   return request<{ timeline: TimelineItem[] }>(`/meetings/timeline?${q}`);
+}
+
+// --- PIT / UPSI case law ---
+export interface CaseQuery {
+  q?: string;
+  years?: string[];
+  authorities?: string[];
+  orderTypes?: string[];
+  outcomes?: string[];
+  bands?: string[];
+  citations?: string[];
+  company?: string;
+  sort?: 'recent' | 'relevance' | 'penalty' | 'oldest';
+  limit?: number;
+  offset?: number;
+}
+
+export function getCaseFacets() {
+  return request<{
+    stats: CaseStats;
+    penaltyBands: { id: string; label: string }[];
+  }>('/cases/facets');
+}
+
+export function searchCases(p: CaseQuery) {
+  const q = new URLSearchParams();
+  if (p.q) q.set('q', p.q);
+  for (const k of ['years', 'authorities', 'orderTypes', 'outcomes', 'bands', 'citations'] as const) {
+    const v = p[k];
+    if (v?.length) q.set(k, v.join(','));
+  }
+  if (p.company) q.set('company', p.company);
+  if (p.sort) q.set('sort', p.sort);
+  if (p.limit) q.set('limit', String(p.limit));
+  if (p.offset) q.set('offset', String(p.offset));
+  return request<CaseSearchResponse>(`/cases?${q}`);
+}
+
+/** Full order text for the detail view. */
+export function getCase(id: string) {
+  return request<{ case: CaseOrder }>(`/cases/${encodeURIComponent(id)}`);
 }
 
 // --- PDF helpers (go through backend proxy) ---

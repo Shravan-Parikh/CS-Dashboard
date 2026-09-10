@@ -319,3 +319,64 @@ export interface MeetingType {
   label: string;
   note: string;
 }
+
+// --- PIT / UPSI case law ---
+
+export interface CaseOrder {
+  id: string;
+  title: string;
+  url: string;
+  pdfUrl: string;
+  pages: number;
+  sha256: string;
+  fetchedAt: string;
+  chars: number;
+  orderType: string;
+  orderTypeLabel: string;
+  authority: string;
+  year: number;
+  month: string;
+  period: string;
+  company: string;
+  subject: string;
+  penalty: number;
+  penaltyDetected: boolean;
+  citations: string[];
+  outcome: string;
+  band: string;
+  /** Only present on search results. */
+  score?: number;
+  snippet?: string;
+  /** Only present on the detail response. */
+  text?: string;
+}
+
+export interface CaseFacets {
+  years: Record<string, number>;
+  authorities: Record<string, number>;
+  orderTypes: Record<string, number>;
+  outcomes: Record<string, number>;
+  bands: Record<string, number>;
+}
+
+export interface CaseStats {
+  count: number;
+  builtAt: string;
+  range: { from: number; to: number } | null;
+  discovered: number | null;
+  cappedWindows: number;
+  years: number[];
+  authorities: string[];
+  orderTypes: { id: string; label: string }[];
+  outcomes: { id: string; label: string }[];
+  penaltyBands: { id: string; label: string; min: number; max: number }[];
+  citations: { id: string; count: number }[];
+  totalPenalty: number;
+}
+
+export interface CaseSearchResponse {
+  query: string;
+  results: CaseOrder[];
+  facets: CaseFacets;
+  meta: { total: number; returned: number; elapsedMs: number; corpus: number };
+}

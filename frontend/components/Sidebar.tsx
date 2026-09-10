@@ -9,6 +9,7 @@ import {
   CalendarClock,
   CheckSquare,
   Scale,
+  Gavel,
   FileText,
   Landmark,
   Users,
@@ -39,6 +40,7 @@ const NAV: NavItem[] = [
   { label: 'Compliance Calendar', href: '/compliance', icon: CalendarClock },
   { label: 'My Companies', href: '/companies', icon: Building2, badge: 'watchlist' },
   { label: 'Know the Law', href: '/law', icon: Scale },
+  { label: 'PIT Case Law', href: '/cases', icon: Gavel },
   { label: 'Resolutions & Templates', href: '#', icon: FileText, soon: true },
 ];
 
